@@ -9,10 +9,10 @@ ENV LANG en_US.UTF-8
 ENV LANGUAGE en_US:en
 ENV LC_ALL en_US.UTF-8
 
-WORKDIR /opt
+WORKDIR /opt/rossmann-tf
 
 EXPOSE 8888
 RUN pip3 install pandas
 RUN python3 -m ipykernel.kernelspec
 COPY . .
-CMD ["bash", "-c", "source /etc/bash.bashrc && jupyter notebook --notebook-dir=/opt --ip 0.0.0.0 --no-browser --allow-root"]
+CMD ["bash", "-c", "source /etc/bash.bashrc && jupyter notebook --notebook-dir=/opt/rossmann-tf --ip 0.0.0.0 --no-browser --allow-root"]
