@@ -1,0 +1,5 @@
+.dockerignore
+.git
+data/test_clean.parquet
+data/train_clean.parquet
+data/train_model_features.parquet

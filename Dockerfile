@@ -17,5 +17,5 @@ RUN python3 -m ipykernel.kernelspec
 RUN jupyter nbextensions_configurator enable --user
 RUN jupyter contrib nbextension install --user
 RUN jupyter nbextension enable toc2/main
-#COPY . .
+COPY . .
 CMD ["bash", "-c", "source /etc/bash.bashrc && jupyter notebook --notebook-dir=/opt/rossmann-tf --ip 0.0.0.0 --no-browser --allow-root"]
