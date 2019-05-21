@@ -1,7 +1,9 @@
 import tensorflow as tf
 from tensorflow.keras import layers
 import pandas as pd
-
+import custom_layers
+import numpy as np
+import custom_losses
 
 def df_to_dataset(dataframe: pd.DataFrame, shuffle: bool = True, batch_size: int = 32) -> tf.data.Dataset:
     """
@@ -14,7 +16,7 @@ def df_to_dataset(dataframe: pd.DataFrame, shuffle: bool = True, batch_size: int
 
     df = dataframe.copy()
     df.pop('Date')
-    labels = df.pop('Sales')
+    labels = df.pop('Sales').astype(np.float32)
 
     ds = tf.data.Dataset.from_tensor_slices((dict(df), labels))
 
@@ -30,8 +32,8 @@ def main(args=None):
     train_set = pd.read_parquet('./data/train.parquet')
     valid_set = pd.read_parquet('./data/valid.parquet')
 
-    batch_size = 5
-    train_ds = df_to_dataset(train_set, batch_size=batch_size, shuffle=False)
+    batch_size = 8192
+    train_ds = df_to_dataset(train_set, batch_size=batch_size, shuffle=True)
     valid_ds = df_to_dataset(valid_set, batch_size=batch_size, shuffle=False)
 
     for feat, lab in train_ds.take(1):
@@ -59,15 +61,19 @@ def main(args=None):
 
     model = tf.keras.Sequential([
         feature_layer,
-        layers.Dense(128, activation='relu'),
-        layers.Dense(128, activation='relu'),
+        custom_layers.DenseBlock(1024, dropout=0.5),
+        custom_layers.DenseBlock(512, dropout=0.5),
+        custom_layers.DenseBlock(256, dropout=0.5),
         layers.Dense(1, activation='relu')
     ])
 
     model.compile(optimizer='adam',
-                  loss='mean_squared_error',
+                  loss=custom_losses.mean_squared_percentage_error,
                   metrics=['mean_squared_error'])
 
+    x = next(iter(train_ds))
+    model(x[0]) - x[1]
+    model.summary()
     model.fit(train_ds,
               validation_data=valid_ds,
               epochs=5)
