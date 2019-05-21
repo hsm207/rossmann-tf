@@ -4,6 +4,7 @@ import pandas as pd
 import custom_layers
 import numpy as np
 import custom_losses
+import custom_metrics
 
 def df_to_dataset(dataframe: pd.DataFrame, shuffle: bool = True, batch_size: int = 32) -> tf.data.Dataset:
     """
@@ -69,7 +70,7 @@ def main(args=None):
 
     model.compile(optimizer='adam',
                   loss=custom_losses.mean_squared_percentage_error,
-                  metrics=['mean_squared_error'])
+                  metrics=[custom_metrics.rmspe])
 
     x = next(iter(train_ds))
     model(x[0]) - x[1]
