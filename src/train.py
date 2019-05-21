@@ -5,6 +5,8 @@ import custom_layers
 import numpy as np
 import custom_losses
 import custom_metrics
+import preprocess
+
 
 def df_to_dataset(dataframe: pd.DataFrame, shuffle: bool = True, batch_size: int = 32) -> tf.data.Dataset:
     """
@@ -37,11 +39,6 @@ def main(args=None):
     train_ds = df_to_dataset(train_set, batch_size=batch_size, shuffle=True)
     valid_ds = df_to_dataset(valid_set, batch_size=batch_size, shuffle=False)
 
-    for feat, lab in train_ds.take(1):
-        pass
-        feat.keys()
-        feat['Min_Humidity']
-
     cont_vars = ['AfterStateHoliday',
                  'BeforeStateHoliday',
                  'CompetitionDistance',
@@ -56,10 +53,26 @@ def main(args=None):
                  'trend',
                  'trend_DE']
 
+    cat_vars_with_vocab = {
+        'Assortment': ['a' 'c' 'b'],
+        'CloudCover': ['1.0' '4.0' '2.0' '6.0' '5.0' 'nan' '3.0' '8.0' '7.0' '0.0'],
+        'Events': ['Fog' '-1' 'Rain' 'Rain-Thunderstorm' 'Fog-Rain' 'Rain-Hail-Thunderstorm'
+                   'Fog-Rain-Thunderstorm' 'Thunderstorm' 'Rain-Hail' 'Fog-Thunderstorm'
+                   'Rain-Snow' 'Fog-Rain-Hail-Thunderstorm' 'Snow' 'Rain-Snow-Hail'
+                   'Rain-Snow-Hail-Thunderstorm' 'Rain-Snow-Thunderstorm' 'Fog-Rain-Snow'
+                   'Fog-Snow' 'Snow-Hail' 'Fog-Rain-Snow-Hail' 'Fog-Rain-Hail'
+                   'Fog-Snow-Hail'],
+        'PromoInterval': ['-1' 'Jan,Apr,Jul,Oct' 'Feb,May,Aug,Nov' 'Mar,Jun,Sept,Dec'],
+        'State': ['HE' 'TH' 'NW' 'BE' 'SN' 'SH' 'HB,NI' 'BY' 'BW' 'RP' 'ST' 'HH'],
+        'StoreType': ['c' 'a' 'd' 'b']
+    }
+
     cont_features = [tf.feature_column.numeric_column(var) for var in cont_vars]
+    cat_features_with_vocab = preprocess.create_embedding_features(cat_vars_with_vocab, dim=32)
+    feature_layer = layers.DenseFeatures(cont_features + cat_features_with_vocab)
 
-    feature_layer = layers.DenseFeatures(cont_features)
-
+    # for viewing the feature layer
+    x, y = next(iter(train_ds.take(1)))
     model = tf.keras.Sequential([
         feature_layer,
         custom_layers.DenseBlock(1024, dropout=0.5),
@@ -78,6 +91,7 @@ def main(args=None):
     model.fit(train_ds,
               validation_data=valid_ds,
               epochs=5)
+
 
 if __name__ == '__main__':
     main()
