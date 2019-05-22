@@ -36,11 +36,11 @@ def main(args=None):
     train_set = pd.read_parquet('./data/train.parquet')
     valid_set = pd.read_parquet('./data/valid.parquet')
 
-    batch_size = 8192
+    batch_size = 32768
 
     # CLR parameters
     epochs = 10
-    max_lr = 1e-2
+    max_lr = 5e-3
     base_lr = max_lr / 10
     max_m = 0.98
     base_m = 0.85
@@ -60,7 +60,11 @@ def main(args=None):
     callbacks = [clr]
     optimizer = tf.keras.optimizers.SGD(learning_rate=0.0000001)
 
-    final_activation = utils.create_rescaled_sigmoid_fn(0.0, 41551.000000 * 1.20) # min & max is from EDA notebook
+    final_activation = utils.create_rescaled_sigmoid_fn(0.0, tf.math.log(41551 * 1.20)) # min & max is from EDA notebook
+    loss_fn = custom_losses.mse_log
+
+    embedding_dim = 64
+    dropout_rate = 0.1
 
     train_ds = df_to_dataset(train_set, batch_size=batch_size, shuffle=True)
     valid_ds = df_to_dataset(valid_set, batch_size=batch_size, shuffle=False)
@@ -124,8 +128,8 @@ def main(args=None):
 
     cont_features = preprocess.create_norm_continuos_features(cont_vars_norm_params)
     # cont_features = [tf.feature_column.numeric_column(var) for var in cont_vars]
-    cat_features_with_vocab = preprocess.create_embedding_features(cat_vars_with_vocab, dim=32)
-    cat_features_hash_buckets = preprocess.create_embeddings_with_hash_buckets(cat_vars_hash_buckets, dim=32)
+    cat_features_with_vocab = preprocess.create_embedding_features(cat_vars_with_vocab, dim=embedding_dim)
+    cat_features_hash_buckets = preprocess.create_embeddings_with_hash_buckets(cat_vars_hash_buckets, dim=embedding_dim)
 
     feature_layer = layers.DenseFeatures(cont_features + cat_features_with_vocab + cat_features_hash_buckets)
 
@@ -133,15 +137,15 @@ def main(args=None):
     x, y = next(iter(train_ds.take(1)))
     model = tf.keras.Sequential([
         feature_layer,
-        custom_layers.DenseBlock(1024, dropout=0.5),
-        custom_layers.DenseBlock(512, dropout=0.5),
-        custom_layers.DenseBlock(256, dropout=0.5),
+        custom_layers.DenseBlock(1024, dropout=dropout_rate),
+        custom_layers.DenseBlock(512, dropout=dropout_rate),
+        custom_layers.DenseBlock(256, dropout=dropout_rate),
         layers.Dense(1, activation=final_activation)
     ])
     # feature_layer(x)
 
     model.compile(optimizer=optimizer,
-                  loss=custom_losses.mean_squared_percentage_error,
+                  loss=loss_fn,
                   metrics=[custom_metrics.rmspe])
 
     x = next(iter(train_ds))
