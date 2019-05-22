@@ -117,8 +117,6 @@ def main(args=None):
                   loss=custom_losses.mean_squared_percentage_error,
                   metrics=[custom_metrics.rmspe])
 
-    x = next(iter(train_ds))
-    model(x[0]) - x[1]
     model.summary()
     model.fit(train_ds,
               validation_data=valid_ds,
