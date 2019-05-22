@@ -13,10 +13,10 @@ import utils
 
 
 def main(args=None):
-    train_set = pd.read_parquet('./data/train.parquet')[:50000]
-    valid_set = pd.read_parquet('./data/valid.parquet')[:50000]
+    train_set = pd.read_parquet('./data/train.parquet')
+    valid_set = pd.read_parquet('./data/valid.parquet')
 
-    batch_size = 32768 // 10
+    batch_size = 32768
 
     # include the epoch in the file name. (uses `str.format`)
     checkpoint_path = "logdir/cp-{epoch:04d}-{val_loss:.4f}.ckpt"
@@ -30,8 +30,8 @@ def main(args=None):
 
     # CLR parameters
     epochs = 20000
-    max_lr = 5e-3
-    base_lr = max_lr / 10
+    max_lr = 5e-2
+    base_lr = max_lr / 100
     max_m = 0.98
     base_m = 0.85
     cyclical_momentum = True
@@ -83,6 +83,6 @@ def main(args=None):
               epochs=epochs,
               callbacks=callbacks)
 
-
+3
 if __name__ == '__main__':
     main()
