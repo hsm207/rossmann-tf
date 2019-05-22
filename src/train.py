@@ -1,5 +1,7 @@
 import tensorflow as tf
 from tensorflow.keras import layers
+# from tensorflow.keras import callbacks
+import lr_schedules
 import pandas as pd
 import custom_layers
 import custom_losses
@@ -35,6 +37,28 @@ def main(args=None):
     valid_set = pd.read_parquet('./data/valid.parquet')
 
     batch_size = 8192
+
+    # CLR parameters
+    epochs = 10
+    max_lr = 0.0005
+    base_lr = max_lr / 10
+    max_m = 0.98
+    base_m = 0.85
+    cyclical_momentum = True
+    cycles = 2.35
+    iterations = round(len(train_set) / batch_size * epochs)
+    iterations = list(range(0, iterations + 1))
+    step_size = len(iterations) / (cycles)
+
+    clr = lr_schedules.CyclicLR(base_lr=base_lr,
+                                max_lr=max_lr,
+                                step_size=step_size,
+                                max_m=max_m,
+                                base_m=base_m,
+                                cyclical_momentum=cyclical_momentum)
+
+    optimzer = tf.keras.optimizers.SGD(learning_rate=0.0000001)
+
     train_ds = df_to_dataset(train_set, batch_size=batch_size, shuffle=True)
     valid_ds = df_to_dataset(valid_set, batch_size=batch_size, shuffle=False)
 
@@ -111,9 +135,10 @@ def main(args=None):
         custom_layers.DenseBlock(256, dropout=0.5),
         layers.Dense(1, activation='relu')
     ])
-    feature_layer(x)
+    # feature_layer(x)
 
-    model.compile(optimizer='adam',
+    callbacks = [clr]
+    model.compile(optimizer=optimzer,
                   loss=custom_losses.mean_squared_percentage_error,
                   metrics=[custom_metrics.rmspe])
 
@@ -122,7 +147,8 @@ def main(args=None):
     model.summary()
     model.fit(train_ds,
               validation_data=valid_ds,
-              epochs=5)
+              epochs=epochs,
+              callbacks=callbacks)
 
 
 if __name__ == '__main__':
