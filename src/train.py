@@ -57,8 +57,10 @@ def main(args=None):
                                 base_m=base_m,
                                 cyclical_momentum=cyclical_momentum)
 
-    callbacks = [clr]
-    optimizer = tf.keras.optimizers.SGD(learning_rate=0.0000001)
+    # callbacks = [clr]
+    # optimizer = tf.keras.optimizers.SGD(learning_rate=0.0000001)
+    callbacks = None
+    optimizer = 'adam'
 
     final_activation = utils.create_rescaled_sigmoid_fn(0.0, tf.math.log(41551 * 1.20)) # min & max is from EDA notebook
     loss_fn = custom_losses.mse_log
