@@ -1,12 +1,12 @@
 import tensorflow as tf
 from tensorflow.keras import layers
-# from tensorflow.keras import callbacks
 import lr_schedules
 import pandas as pd
 import custom_layers
 import custom_losses
 import custom_metrics
 import preprocess
+import utils
 
 
 def df_to_dataset(dataframe: pd.DataFrame, shuffle: bool = True, batch_size: int = 32) -> tf.data.Dataset:
@@ -40,7 +40,7 @@ def main(args=None):
 
     # CLR parameters
     epochs = 10
-    max_lr = 0.0005
+    max_lr = 1e-2
     base_lr = max_lr / 10
     max_m = 0.98
     base_m = 0.85
@@ -58,6 +58,8 @@ def main(args=None):
                                 cyclical_momentum=cyclical_momentum)
 
     optimzer = tf.keras.optimizers.SGD(learning_rate=0.0000001)
+
+    final_activation = utils.create_rescaled_sigmoid_fn(0.0, 41551.000000 * 1.20) # min & max is from EDA notebook
 
     train_ds = df_to_dataset(train_set, batch_size=batch_size, shuffle=True)
     valid_ds = df_to_dataset(valid_set, batch_size=batch_size, shuffle=False)
@@ -133,7 +135,7 @@ def main(args=None):
         custom_layers.DenseBlock(1024, dropout=0.5),
         custom_layers.DenseBlock(512, dropout=0.5),
         custom_layers.DenseBlock(256, dropout=0.5),
-        layers.Dense(1, activation='relu')
+        layers.Dense(1, activation=final_activation)
     ])
     # feature_layer(x)
 
