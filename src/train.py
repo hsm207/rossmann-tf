@@ -2,7 +2,6 @@ import tensorflow as tf
 from tensorflow.keras import layers
 import pandas as pd
 import custom_layers
-import numpy as np
 import custom_losses
 import custom_metrics
 import preprocess
@@ -19,7 +18,7 @@ def df_to_dataset(dataframe: pd.DataFrame, shuffle: bool = True, batch_size: int
 
     df = dataframe.copy()
     df.pop('Date')
-    labels = df.pop('Sales').astype(np.float32)
+    labels = df.pop('Sales')
 
     ds = tf.data.Dataset.from_tensor_slices((dict(df), labels))
 
@@ -67,9 +66,41 @@ def main(args=None):
         'StoreType': ['c' 'a' 'd' 'b']
     }
 
-    cont_features = [tf.feature_column.numeric_column(var) for var in cont_vars]
+    cat_vars_no_vocab = [
+        'CompetitionMonthsOpen',
+        'CompetitionOpenSinceYear',
+        'Day',
+        'DayOfWeek',
+        'Month',
+        'Promo',
+        'Promo2SinceYear',
+        'Promo2Weeks',
+        'Promo_bw',
+        'Promo_fw',
+        'SchoolHoliday',
+        'SchoolHoliday_bw',
+        'SchoolHoliday_fw',
+        'StateHoliday',
+        'StateHoliday_bw',
+        'StateHoliday_fw',
+        'Store',
+        'Week',
+        'Year',
+        'CompetitionDistance_na'
+    ]
+
+    cat_vars_hash_buckets = dict(train_set[cat_vars_no_vocab].nunique())
+
+    cont_vars_norm_params = pd.concat([train_set[cont_vars].mean(), train_set[cont_vars].std()], axis=1) \
+        .reset_index() \
+        .values.tolist()
+
+    cont_features = preprocess.create_norm_continuos_features(cont_vars_norm_params)
+    # cont_features = [tf.feature_column.numeric_column(var) for var in cont_vars]
     cat_features_with_vocab = preprocess.create_embedding_features(cat_vars_with_vocab, dim=32)
-    feature_layer = layers.DenseFeatures(cont_features + cat_features_with_vocab)
+    cat_features_hash_buckets = preprocess.create_embeddings_with_hash_buckets(cat_vars_hash_buckets, dim=32)
+
+    feature_layer = layers.DenseFeatures(cont_features + cat_features_with_vocab + cat_features_hash_buckets)
 
     # for viewing the feature layer
     x, y = next(iter(train_ds.take(1)))
@@ -80,6 +111,7 @@ def main(args=None):
         custom_layers.DenseBlock(256, dropout=0.5),
         layers.Dense(1, activation='relu')
     ])
+    feature_layer(x)
 
     model.compile(optimizer='adam',
                   loss=custom_losses.mean_squared_percentage_error,
