@@ -62,6 +62,8 @@ def main(args=None):
 
     final_activation = utils.create_rescaled_sigmoid_fn(0.0, 41551.000000 * 1.20) # min & max is from EDA notebook
 
+    final_activation = utils.create_rescaled_sigmoid_fn(0.0, 41551.000000 * 1.20) # min & max is from EDA notebook
+
     train_ds = df_to_dataset(train_set, batch_size=batch_size, shuffle=True)
     valid_ds = df_to_dataset(valid_set, batch_size=batch_size, shuffle=False)
 
