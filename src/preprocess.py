@@ -1,5 +1,5 @@
 import tensorflow as tf
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 
 def create_embedding_features(columns: Dict[str, List[str]], dim: int = 32):
@@ -24,3 +24,14 @@ def create_embeddings_with_hash_buckets(columns: Dict[str, List[int]], dim: int 
                       for cat_column in cat_columns]
 
     return embed_features
+
+
+def create_norm_continuos_features(column_params: List[Tuple[str, float, float]]):
+    cont_features = []
+    for column_param in column_params:
+        col_name, mean, sd = column_param
+        normalizer_fn = lambda val: (val - mean) / sd
+        cont_feature = tf.feature_column.numeric_column(col_name, normalizer_fn=normalizer_fn)
+        cont_features.append(cont_feature)
+
+    return cont_features
