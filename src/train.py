@@ -38,8 +38,18 @@ def main(args=None):
 
     batch_size = 32768
 
+    # include the epoch in the file name. (uses `str.format`)
+    checkpoint_path = "logdir/cp-{epoch:04d}-{val_loss:.4f}.ckpt"
+
+    cp_callback = tf.keras.callbacks.ModelCheckpoint(checkpoint_path,
+                                                     verbose=1,
+                                                     save_weights_only=True,
+                                                     save_best_only=True,
+                                                     mode='min',
+                                                     monitor='val_loss')
+
     # CLR parameters
-    epochs = 10
+    epochs = 20000
     max_lr = 5e-3
     base_lr = max_lr / 10
     max_m = 0.98
@@ -57,9 +67,8 @@ def main(args=None):
                                 base_m=base_m,
                                 cyclical_momentum=cyclical_momentum)
 
-    # callbacks = [clr]
+    callbacks = [cp_callback]
     # optimizer = tf.keras.optimizers.SGD(learning_rate=0.0000001)
-    callbacks = None
     optimizer = 'adam'
 
     final_activation = utils.create_rescaled_sigmoid_fn(0.0, tf.math.log(41551 * 1.20)) # min & max is from EDA notebook
