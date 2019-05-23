@@ -29,8 +29,8 @@ def main(args=None):
                                                      monitor='val_loss')
 
     # CLR parameters
-    epochs = 20000
-    max_lr = 5e-2
+    epochs = 200
+    max_lr = 2e-2
     base_lr = max_lr / 100
     max_m = 0.98
     base_m = 0.85
