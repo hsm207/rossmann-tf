@@ -12,7 +12,7 @@ ENV LC_ALL en_US.UTF-8
 WORKDIR /opt/rossmann-tf
 
 EXPOSE 8888
-RUN pip3 install pandas pyarrow jupyter_contrib_nbextensions jupyter_nbextensions_configurator sklearn
+RUN pip3 install pandas pyarrow jupyter_contrib_nbextensions jupyter_nbextensions_configurator sklearn tensorflow-addons
 RUN python3 -m ipykernel.kernelspec
 RUN jupyter nbextensions_configurator enable --user
 RUN jupyter contrib nbextension install --user
