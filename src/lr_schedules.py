@@ -205,6 +205,4 @@ def find_lr(model, ds, start_lr: float = 1e-7,
     axes[1].set_ylabel('Learning Rate')
     axes[1].set_xlabel('Step')
 
-    fig.savefig('./figures/viz.png')
-
     return fig
