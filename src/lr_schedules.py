@@ -5,7 +5,7 @@ import tensorflow as tf
 from tensorflow.keras import backend as K
 from tensorflow.keras.callbacks import *
 from numbers import Number
-from typing import Callable
+from typing import Callable, Tuple, List
 import numpy as np
 import sys
 import itertools
@@ -45,80 +45,84 @@ class Stepper:
         return self.n >= self.total_steps
 
 
-class CyclicLR(tf.keras.callbacks.Callback):
+class OneCycleScheduler(tf.keras.callbacks.Callback):
+    def __init__(self,
+                 lr_max: float,
+                 num_epochs: int,
+                 num_observations: int,
+                 batch_size: int,
+                 moms: Tuple[float, float] = (0.95, 0.85),
+                 div_factor: float = 25.,
+                 pct_start: float = 0.3
+                 ):
 
-    def __init__(self, base_lr, max_lr, step_size, base_m, max_m, cyclical_momentum):
+        start_lr = lr_max / div_factor
+        end_lr = start_lr / 1e4
+        mom_start, mom_end = moms
 
-        self.base_lr = base_lr
-        self.max_lr = max_lr
-        self.base_m = base_m
-        self.max_m = max_m
-        self.cyclical_momentum = cyclical_momentum
-        self.step_size = step_size
+        n_iters = num_observations // batch_size * num_epochs
+        # number of steps for the first phase of the cycle
+        phase1_iter = int(n_iters * pct_start)
+        # number of steps for the second phase of the cycle
+        phase2_iter = n_iters - phase1_iter
+        # attribute to hold the params of the cycle
+        self.phases = ((phase1_iter, annealing_cos),
+                       (phase2_iter, annealing_cos))
 
-        self.clr_iterations = 0.
-        self.cm_iterations = 0.
-        self.trn_iterations = 0.
-        self.history = {}
+        self.lr_schedule = self._build_schedule((start_lr, lr_max),
+                                                (lr_max, end_lr))
+        self.mom_schedule = self._build_schedule((mom_start, mom_end),
+                                                 (mom_end, mom_start))
+        # index to control phase 1 or phase 2 part of the schedule
+        self.schedule_idx = 0
 
-    def clr(self):
+        self.lr_hist = []
+        self.mom_hist = []
 
-        cycle = np.floor(1 + self.clr_iterations / (2 * self.step_size))
+    def _build_schedule(self, *schedule_rates: Tuple[float, float]):
+        return [
+            Stepper(start=start_rate, end=end_rate, steps=steps, anneal_func=func)
+            for ((start_rate, end_rate), (steps, func)) in zip(schedule_rates, self.phases)
+        ]
 
-        if cycle == 2:
-            x = np.abs(self.clr_iterations / self.step_size - 2 * cycle + 1)
-            return self.base_lr - (self.base_lr - self.base_lr / 100) * np.maximum(0, (1 - x))
+    def on_train_begin(self, logs=None):
+        self.opt = self.model.optimizer
 
-        else:
-            x = np.abs(self.clr_iterations / self.step_size - 2 * cycle + 1)
-            return self.base_lr + (self.max_lr - self.base_lr) * np.maximum(0, (1 - x))
+        lr = self.lr_schedule[0].start
+        mom = self.mom_schedule[0].start
 
-    def cm(self):
+        K.set_value(self.opt.learning_rate, lr)
+        K.set_value(self.opt.beta_1, mom)
 
-        cycle = np.floor(1 + self.clr_iterations / (2 * self.step_size))
+        self.lr_hist.append(lr)
+        self.mom_hist.append(mom)
 
-        if cycle == 2:
+    def on_train_batch_end(self, batch, logs=None):
+        i = self.schedule_idx
+        lr = self.lr_schedule[i].step()
+        mom = self.mom_schedule[i].step()
 
-            x = np.abs(self.clr_iterations / self.step_size - 2 * cycle + 1)
-            return self.max_m
+        self.lr_hist.append(lr)
+        self.mom_hist.append(mom)
 
-        else:
-            x = np.abs(self.clr_iterations / self.step_size - 2 * cycle + 1)
-            return self.max_m - (self.max_m - self.base_m) * np.maximum(0, (1 - x))
+        K.set_value(self.opt.learning_rate, lr)
+        K.set_value(self.opt.beta_1, mom)
 
-    def on_train_begin(self, logs={}):
-        logs = logs or {}
+        if self.lr_schedule[i].is_done:
+            self.schedule_idx += 1
 
-        if self.clr_iterations == 0:
-            K.set_value(self.model.optimizer.lr, self.base_lr)
-        else:
-            K.set_value(self.model.optimizer.lr, self.clr())
+        # stop training once both phases are done
+        if self.schedule_idx >= len(self.lr_schedule):
+            self.model.stop_training = True
 
-        if self.cyclical_momentum == True:
-            if self.clr_iterations == 0:
-                K.set_value(self.model.optimizer.momentum, self.cm())
-            else:
-                K.set_value(self.model.optimizer.momentum, self.cm())
+    def on_epoch_end(self, epoch, logs=None):
+        logs['lr_history'] = self.lr_hist
+        logs['mom_history'] = self.mom_hist
 
-    def on_batch_begin(self, batch, logs=None):
+        self.lr_hist = []
+        self.mom_hist = []
 
-        logs = logs or {}
-        self.trn_iterations += 1
-        self.clr_iterations += 1
 
-        self.history.setdefault('lr', []).append(K.get_value(self.model.optimizer.lr))
-        self.history.setdefault('iterations', []).append(self.trn_iterations)
-
-        if self.cyclical_momentum == True:
-            self.history.setdefault('momentum', []).append(K.get_value(self.model.optimizer.momentum))
-
-        for k, v in logs.items():
-            self.history.setdefault(k, []).append(v)
-
-        K.set_value(self.model.optimizer.lr, self.clr())
-
-        if self.cyclical_momentum == True:
-            K.set_value(self.model.optimizer.momentum, self.cm())
 class LRFinder(tf.keras.callbacks.Callback):
     def __init__(self, start_lr: float = 1e-7,
                  end_lr: float = 10,
@@ -156,6 +160,86 @@ class LRFinder(tf.keras.callbacks.Callback):
 
         self.loss_history = []
         self.lr_history = []
+
+
+def fit_one_cycle(model: tf.keras.Model,
+                  train_ds: tf.data.Dataset,
+                  val_ds: tf.data.Dataset,
+                  lr_max: float,
+                  num_epochs: int,
+                  num_train_observations: int,
+                  batch_size: int,
+                  moms: Tuple[float, float] = (0.95, 0.85),
+                  div_factor: float = 25.,
+                  pct_start: float = 0.3,
+                  callbacks: List[tf.keras.callbacks.Callback] = []
+                  ):
+    """
+    Train model using one cycle training as outlined in
+    Leslie Smith's [paper](https://arxiv.org/pdf/1803.09820.pdf) and
+    [implemented](https://github.com/fastai/fastai/blob/953214c6b78a0ec96a79d57e56aaf8d9900033de/fastai/train.py#L14)
+    in the [fastai library
+
+    :param model: a compiled keras model to train
+    :param train_ds: the training set
+    :param val_ds: the validation set
+    :param lr_max: maximum learning identified using find_lr
+    :param num_epochs: number of epochs to do training
+    :param num_train_observations: number of observations in train_ds
+    :param batch_size: batch size for training
+    :param moms: the schedule for the optimizer's momentum
+    :param div_factor: factor used to compute the starting learning rate
+    :param pct_start: fraction that the iterations to designated as phase 1 of the one cycle training
+    :param callbacks: Other callbacks to be past to model
+    :return:
+    """
+
+    one_cycle_callback = OneCycleScheduler(lr_max=lr_max,
+                                           num_epochs=num_epochs,
+                                           num_observations=num_train_observations,
+                                           batch_size=batch_size,
+                                           moms=moms,
+                                           div_factor=div_factor,
+                                           pct_start=pct_start)
+
+    callbacks.append(one_cycle_callback)
+
+    results = model.fit(train_ds,
+                        validation_data=val_ds,
+                        epochs=num_epochs,
+                        callbacks=callbacks,
+                        verbose=1)
+
+    lr_history = results.history['lr_history']
+    mom_history = results.history['mom_history']
+    train_loss = results.history['loss']
+    val_loss = results.history['val_loss']
+
+    lr_history = list(itertools.chain(*lr_history))
+    mom_history = list(itertools.chain(*mom_history))
+
+    n_epochs = list(range(1, len(val_loss) + 1))
+    n_steps = list(range(1, len(lr_history) + 1))
+
+    fig, axes = plt.subplots(3, 1)
+    fig.set_size_inches(w=10, h=10)
+
+    # TODO: Check if train loss is computed over all batches at the end of epoch
+    axes[0].plot(n_epochs, train_loss[:len(val_loss)])
+    axes[0].plot(n_epochs, val_loss)
+    axes[0].legend(['Train', 'Validation'])
+    axes[0].set_xlabel('Epoch')
+    axes[0].set_ylabel('Loss')
+
+    axes[1].plot(n_steps, lr_history)
+    axes[1].set_xlabel('Step')
+    axes[1].set_ylabel('Learning Rate')
+
+    axes[2].plot(n_steps, mom_history)
+    axes[2].set_xlabel('Step')
+    axes[2].set_ylabel('Momentum')
+
+    return fig
 
 
 def find_lr(model, ds, start_lr: float = 1e-7,
